@@ -837,12 +837,16 @@ def _save_reused_market_review_report(
     body = str(market_report or "").strip()
     if not body:
         return
-    title = (
-        "# 🎯 Market Review"
-        if str(getattr(config, "report_language", "zh")).strip().lower() == "en"
-        else "# 🎯 大盘复盘"
-    )
-    if not any(body.startswith(item) for item in ("# 🎯 大盘复盘", "# 🎯 Market Review")):
+    lang = str(getattr(config, "report_language", "zh")).strip().lower()
+    if lang == "en":
+        title = "# 🎯 Market Review"
+    elif lang == "ko":
+        title = "# 🎯 시황 리뷰"
+    elif lang == "th":
+        title = "# 🎯 สรุปภาพรวมตลาด"
+    else:
+        title = "# 🎯 大盘复盘"
+    if not any(body.startswith(item) for item in ("# 🎯 大盘复盘", "# 🎯 Market Review", "# 🎯 시황 리뷰", "# 🎯 สรุปภาพรวมตลาด")):
         body = f"{title}\n\n{body}"
     try:
         date_str = datetime.now().strftime('%Y%m%d')
@@ -1190,8 +1194,15 @@ def run_full_analysis(
                     and not args.no_notify
                     and pipeline.notifier.is_available()
                 ):
+                    lang = str(getattr(config, "report_language", "zh")).strip().lower()
+                    mr_header = (
+                        "# 📈 Market Review" if lang == "en"
+                        else "# 📈 시황 리뷰" if lang == "ko"
+                        else "# 📈 สรุปภาพรวมตลาด" if lang == "th"
+                        else "# 📈 大盘复盘"
+                    )
                     if pipeline.notifier.send(
-                        f"# 📈 大盘复盘\n\n{market_report}",
+                        f"{mr_header}\n\n{market_report}",
                         email_send_to_all=True,
                         route_type="report",
                     ):
@@ -1274,15 +1285,28 @@ def run_full_analysis(
 
         # Issue #190: 合并推送（个股+大盘复盘）
         if merge_notification and (results or market_report) and not args.no_notify:
+            lang = str(getattr(config, "report_language", "zh")).strip().lower()
+            mr_header = (
+                "# 📈 Market Review" if lang == "en"
+                else "# 📈 시황 리뷰" if lang == "ko"
+                else "# 📈 สรุปภาพรวมตลาด" if lang == "th"
+                else "# 📈 大盘复盘"
+            )
+            stock_header = (
+                "# 🚀 Stock Decision Dashboard" if lang == "en"
+                else "# 🚀 종목 의사결정 대시보드" if lang == "ko"
+                else "# 🚀 แดชบอร์ดการตัดสินใจรายหุ้น" if lang == "th"
+                else "# 🚀 个股决策仪表盘"
+            )
             parts = []
             if market_report:
-                parts.append(f"# 📈 大盘复盘\n\n{market_report}")
+                parts.append(f"{mr_header}\n\n{market_report}")
             if results:
                 dashboard_content = pipeline.notifier.generate_aggregate_report(
                     results,
                     getattr(config, 'report_type', 'simple'),
                 )
-                parts.append(f"# 🚀 个股决策仪表盘\n\n{dashboard_content}")
+                parts.append(f"{stock_header}\n\n{dashboard_content}")
             if parts:
                 combined_content = "\n\n---\n\n".join(parts)
                 if pipeline.notifier.is_available():

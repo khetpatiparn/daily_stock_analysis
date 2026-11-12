@@ -43,9 +43,54 @@ logger = logging.getLogger(__name__)
 _LEGACY_ANALYZER_BACKEND_ID = "legacy_analyzer"
 
 _ENGLISH_SECTION_PATTERNS = {
-    "market_summary": r"###\s*(?:1\.\s*)?Market Summary",
-    "index_commentary": r"###\s*(?:2\.\s*)?(?:Index Commentary|Major Indices)",
-    "sector_highlights": r"###\s*(?:4\.\s*)?(?:Sector Highlights|Sector/Theme Highlights)",
+    "market_summary": r"###\s*(?:1\.\s*)?(?:Market Summary|สรุปภาพรวมตลาด)",
+    "index_commentary": r"###\s*(?:2\.\s*)?(?:Index Commentary|Major Indices|วิเคราะห์ดัชนีหลัก|ดัชนีหลัก)",
+    "sector_highlights": r"###\s*(?:4\.\s*)?(?:Sector Highlights|Sector/Theme Highlights|กลุ่มอุตสาหกรรมและธีมเด่น)",
+}
+
+_NON_ZH_INDEX_NAMES = {
+    "SPX": "S&P 500",
+    "^GSPC": "S&P 500",
+    "标普500指数": "S&P 500",
+    "DJI": "Dow Jones",
+    "^DJI": "Dow Jones",
+    "道琼斯工业指数": "Dow Jones",
+    "IXIC": "Nasdaq Composite",
+    "^IXIC": "Nasdaq Composite",
+    "纳斯达克综合指数": "Nasdaq Composite",
+    "NDX": "Nasdaq 100",
+    "^NDX": "Nasdaq 100",
+    "纳斯达克100指数": "Nasdaq 100",
+    "VIX": "VIX Volatility",
+    "^VIX": "VIX Volatility",
+    "VIX恐慌指数": "VIX Volatility",
+    "RUT": "Russell 2000",
+    "^RUT": "Russell 2000",
+    "罗素2000指数": "Russell 2000",
+    "HSI": "Hang Seng Index",
+    "恒生指数": "Hang Seng Index",
+    "HSTECH": "Hang Seng Tech",
+    "恒生科技指数": "Hang Seng Tech",
+    "HSCEI": "HSCEI",
+    "国企指数": "HSCEI",
+    "000001": "SSE Composite",
+    "sh000001": "SSE Composite",
+    "上证指数": "SSE Composite",
+    "399001": "SZSE Component",
+    "sz399001": "SZSE Component",
+    "深证成指": "SZSE Component",
+    "399006": "ChiNext",
+    "sz399006": "ChiNext",
+    "创业板指": "ChiNext",
+    "000688": "STAR 50",
+    "sh000688": "STAR 50",
+    "科创50": "STAR 50",
+    "000016": "SSE 50",
+    "sh000016": "SSE 50",
+    "上证50": "SSE 50",
+    "000300": "CSI 300",
+    "sh000300": "CSI 300",
+    "沪深300": "CSI 300",
 }
 
 _CHINESE_SECTION_PATTERNS = {
@@ -283,10 +328,19 @@ class MarketAnalyzer:
         return normalized_fallback_model or backend
 
     def _get_output_language(self) -> str:
-        """Return the truthful report language (zh/en/ko) for payload and directives."""
+        """Return the truthful report language (zh/en/ko/th) for payload and directives."""
         return normalize_report_language(
             getattr(getattr(self, "config", None), "report_language", "zh")
         )
+
+    def _get_localized_index_name(self, idx: MarketIndex) -> str:
+        """Return localized index display name so Chinese names like 标普500指数 do not leak into en/ko/th reports."""
+        if self._get_output_language() == "zh":
+            return idx.name
+        name_key = str(idx.name or "").strip()
+        if name_key in _NON_ZH_INDEX_NAMES and re.search(r"[\u4e00-\u9fff]", name_key):
+            return _NON_ZH_INDEX_NAMES[name_key]
+        return idx.name
 
     def _get_review_language(self) -> str:
         # Structural/template language. Korean and Thai reuse the English scaffolding;
@@ -342,6 +396,15 @@ class MarketAnalyzer:
         return "🟢" if change_pct > 0 else "🔴"
 
     def _get_review_title(self, date: str) -> str:
+        if self._get_output_language() == "th":
+            market_names_th = {
+                "us": "สรุปภาพรวมตลาดหุ้นสหรัฐฯ",
+                "hk": "สรุปภาพรวมตลาดหุ้นฮ่องกง",
+                "jp": "สรุปภาพรวมตลาดหุ้นญี่ปุ่น",
+                "kr": "สรุปภาพรวมตลาดหุ้นเกาหลี",
+            }
+            market_name = market_names_th.get(self.region, "สรุปภาพรวมตลาดหุ้นจีน A-share")
+            return f"## {date} {market_name}"
         if self._get_review_language() == "en":
             market_names = {
                 "us": "US Market Recap",
@@ -1200,6 +1263,27 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         if not has_stats and not has_market_signal:
             return ""
         light = self.build_market_light_snapshot(overview) if has_market_signal else None
+        if self._get_output_language() == "th":
+            lines = []
+            if isinstance(light, dict):
+                lines.extend(
+                    [
+                        f"- **สัญญาณตลาด**: {light['score']}/100 "
+                        f"({light['temperature_label']}, {light['label']})",
+                        f"- **ปัจจัยขับเคลื่อน**: {'; '.join(light['reasons'])}",
+                        f"- **คำแนะนำกลยุทธ์**: {light['guidance']}",
+                    ]
+                )
+            if has_stats:
+                if lines:
+                    lines.append("")
+                lines.append(
+                    f"- **ความกว้างตลาด**: หุ้นบวก {overview.up_count} / หุ้นลบ {overview.down_count} / "
+                    f"ไม่เปลี่ยนแปลง {overview.flat_count}; "
+                    f"ชนซิลลิ่ง {overview.limit_up_count} / ชนฟลอร์ {overview.limit_down_count}; "
+                    f"มูลค่าซื้อขาย {overview.total_amount:.0f} ({self._get_turnover_unit_label()})"
+                )
+            return "\n".join(lines)
         if self._get_review_language() == "en":
             lines = []
             if isinstance(light, dict):
@@ -1271,7 +1355,19 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         else:
             status = "red"
 
-        if self._get_review_language() == "en":
+        if self._get_output_language() == "th":
+            label_map = {
+                "green": "เปิดรับความเสี่ยง",
+                "yellow": "สมดุล/รอดูจังหวะ",
+                "red": "ระมัดระวังความเสี่ยง",
+            }
+            guidance_map = {
+                "green": "บรรยากาศการลงทุนเปิดรับความเสี่ยงได้ดี เน้นหุ้นกลุ่มนำตลาดและรักษาวินัยขนาดพอร์ต",
+                "yellow": "สัญญาณตลาดยังผสมผสาน แนะนำคุมขนาดพอร์ตในระดับปานกลางและรอจังหวะยืนยันทิศทาง",
+                "red": "ความเสี่ยงอยู่ในระดับสูง เน้นควบคุมการขาดทุนและหลีกเลี่ยงการไล่ราคาในช่วงรีบาวด์สั้น",
+            }
+            reasons = self._build_market_light_reasons_th(overview, score)
+        elif self._get_review_language() == "en":
             label_map = {
                 "green": "risk-on",
                 "yellow": "balanced",
@@ -1309,6 +1405,29 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             data_quality=str(scores["data_quality"]),
         )
         return snapshot.model_dump()
+
+    def _build_market_light_reasons_th(self, overview: MarketOverview, score: int) -> List[str]:
+        participation = overview.up_count + overview.down_count
+        up_ratio = overview.up_count / participation if participation else None
+        reasons: List[str] = []
+        if up_ratio is not None:
+            if up_ratio >= 0.6:
+                reasons.append(f"สัดส่วนหุ้นบวก {up_ratio:.0%} แรงซื้อกระจายตัวดี")
+            elif up_ratio <= 0.4:
+                reasons.append(f"สัดส่วนหุ้นบวก {up_ratio:.0%} แรงขายกดดันตลาด")
+            else:
+                reasons.append(f"สัดส่วนหุ้นบวก {up_ratio:.0%} ตลาดเคลื่อนไหวผสมผสาน")
+        index_changes = self._get_directional_index_changes(overview)
+        if index_changes:
+            avg_change = sum(index_changes) / len(index_changes)
+            reasons.append(f"ดัชนีหลักเปลี่ยนแปลงเฉลี่ย {avg_change:+.2f}%")
+        if overview.limit_up_count or overview.limit_down_count:
+            reasons.append(f"ส่วนต่างหุ้นชนซิลลิ่ง/ฟลอร์ {overview.limit_up_count - overview.limit_down_count:+d}")
+        if not reasons and overview.total_amount:
+            reasons.append(f"มูลค่าการซื้อขาย {overview.total_amount:.0f} ({self._get_turnover_unit_label()})")
+        if not reasons:
+            reasons.append("ประเมินจากข้อมูลดัชนีและภาวะตลาดที่มีอยู่")
+        return reasons[:4]
 
     def _build_market_light_reasons_zh(self, overview: MarketOverview, score: int) -> List[str]:
         participation = overview.up_count + overview.down_count
@@ -1360,7 +1479,12 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         """构建指数行情表格"""
         if not overview.indices:
             return ""
-        if self._get_review_language() == "en":
+        if self._get_output_language() == "th":
+            lines = [
+                f"| ดัชนี | ล่าสุด | เปลี่ยนแปลง % | เปิด | สูงสุด | ต่ำสุด | ความผันผวน | มูลค่าซื้อขาย ({self._get_turnover_unit_label()}) |",
+                "|-------|------|----------|------|------|-----|-----------|-----------------|",
+            ]
+        elif self._get_review_language() == "en":
             lines = [
                 f"| Index | Last | Change % | Open | High | Low | Amplitude | Turnover ({self._get_turnover_unit_label()}) |",
                 "|-------|------|----------|------|------|-----|-----------|-----------------|",
@@ -1374,8 +1498,9 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             arrow = self._get_index_change_arrow(idx.change_pct)
             amount_raw = idx.amount or 0.0
             amount_str = self._format_turnover_value(amount_raw)
+            display_name = self._get_localized_index_name(idx)
             lines.append(
-                f"| {idx.name} | {idx.current:.2f} | {arrow} {idx.change_pct:+.2f}% | "
+                f"| {display_name} | {idx.current:.2f} | {arrow} {idx.change_pct:+.2f}% | "
                 f"{self._format_optional_number(idx.open)} | {self._format_optional_number(idx.high)} | "
                 f"{self._format_optional_number(idx.low)} | {self._format_optional_pct(idx.amplitude)} | {amount_str} |"
             )
@@ -1550,7 +1675,16 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             data_quality = "partial"
 
         score = int(round(breadth_score * 0.45 + index_score * 0.35 + limit_score * 0.20))
-        if self._get_review_language() == "en":
+        if self._get_output_language() == "th":
+            if score >= 70:
+                label = "เชิงรุก"
+            elif score >= 55:
+                label = "ค่อนข้างบวก"
+            elif score >= 40:
+                label = "ผสมผสาน"
+            else:
+                label = "เน้นตั้งรับ"
+        elif self._get_review_language() == "en":
             if score >= 70:
                 label = "risk-on"
             elif score >= 55:
@@ -1583,6 +1717,29 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
 
     def _build_output_template_sections(self, review_language: str) -> str:
         """Build LLM output sections according to market data capabilities."""
+        if self._get_output_language() == "th":
+            section_number = 3
+            sections_th: List[str] = []
+            if self.profile.has_market_stats:
+                sections_th.append(f"""### {section_number}. กระแสเงินทุนและสภาพคล่อง
+(วิเคราะห์มูลค่าการซื้อขาย ความกว้างของตลาด และสัญญาณกระแสเงินทุนตามข้อมูลที่มี)""")
+                section_number += 1
+            if self.profile.has_sector_rankings:
+                sections_th.append(f"""### {section_number}. กลุ่มอุตสาหกรรมและธีมเด่น
+(วิเคราะห์กลุ่มอุตสาหกรรมและธีมที่นำตลาด/กดดันตลาดตามข้อมูลที่มี)""")
+                section_number += 1
+            sections_th.extend([
+                f"""### {section_number}. ปัจจัยข่าวสารและตัวเร่ง
+(เชื่อมโยงข่าวสารล่าสุดเข้ากับการเคลื่อนไหวของดัชนีและปัจจัยมหภาค ห้ามแต่งข้อมูลความกว้างตลาดหรือกระแสเงินทุนที่ไม่มีให้)""",
+                f"""### {section_number + 1}. แนวโน้มตลาดระยะสั้น
+(ประเมินทิศทางตลาดระยะสั้นจากพฤติกรรมราคาดัชนีและข่าวสารที่มี)""",
+                f"""### {section_number + 2}. ปัจจัยเสี่ยงที่ต้องติดตาม
+(ระบุความเสี่ยงสำคัญที่ต้องเฝ้าระวัง)""",
+                f"""### {section_number + 3}. แผนกลยุทธ์การลงทุน
+(ระบุโหมดกลยุทธ์ เชิงรุก/สมดุล/ตั้งรับ แนวทางจัดสรรขนาดพอร์ต เงื่อนไขที่ทำให้มุมมองเปลี่ยน และลงท้ายด้วย "ข้อมูลนี้ใช้เพื่อประกอบการพิจารณาเท่านั้น ไม่ใช่คำแนะนำในการลงทุน")""",
+            ])
+            return "\n\n".join(sections_th)
+
         if review_language == "en":
             if self.profile.has_market_stats and self.profile.has_sector_rankings:
                 return """### 3. Fund Flows
@@ -1674,7 +1831,8 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         indices_text = ""
         for idx in overview.indices:
             direction = "↑" if idx.change_pct > 0 else "↓" if idx.change_pct < 0 else "-"
-            indices_text += f"- {idx.name}: {idx.current:.2f} ({direction}{abs(idx.change_pct):.2f}%)\n"
+            display_name = self._get_localized_index_name(idx)
+            indices_text += f"- {display_name}: {idx.current:.2f} ({direction}{abs(idx.change_pct):.2f}%)\n"
         
         # 板块信息
         top_sectors_text = self._format_ranking_summary(overview.top_sectors)
@@ -1795,6 +1953,8 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
 
         if review_language == "en":
             report_title = self._get_review_title(overview.date).removeprefix("## ").strip()
+            sec1_heading = "### 1. สรุปภาพรวมตลาด" if self._get_output_language() == "th" else "### 1. Market Summary"
+            sec2_heading = "### 2. วิเคราะห์ดัชนีหลัก" if self._get_output_language() == "th" else "### 2. Index Commentary"
             return f"""You are a professional {self._get_market_scope_name('en')} analyst. Please produce a concise market recap report based on the data below.
 
 [Requirements]
@@ -1803,6 +1963,7 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
 - No code blocks
 - Use emoji sparingly in headings (at most one per heading)
 - The entire fixed shell, headings, guidance, and conclusion must be in {shell_language_label}
+- Never output any Chinese characters (such as 标普500指数, 道琼斯, 纳斯达克)
 {data_boundary_requirement}
 
 ---
@@ -1834,10 +1995,10 @@ Concept lagging: {bottom_concepts_text if bottom_concepts_text else "N/A"}"""
 
 ## {report_title}
 
-### 1. Market Summary
+{sec1_heading}
 ({market_summary_hint})
 
-### 2. Index Commentary
+{sec2_heading}
 ({self._get_index_hint()})
 
 {output_template_sections}
@@ -1934,7 +2095,8 @@ Output the report content directly, no extra commentary.
         indices_text = ""
         for idx in overview.indices[:4]:
             marker = self._get_index_change_arrow(idx.change_pct)
-            indices_text += f"- **{idx.name}**: {idx.current:.2f} ({marker} {idx.change_pct:+.2f}%)\n"
+            display_name = self._get_localized_index_name(idx)
+            indices_text += f"- **{display_name}**: {idx.current:.2f} ({marker} {idx.change_pct:+.2f}%)\n"
         
         # 板块信息
         separator = ", " if template_language == "en" else "、"

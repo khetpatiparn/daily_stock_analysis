@@ -82,7 +82,7 @@ _NEGATION_PREFIXES_KO = ("하지", "권하지 않", "금지", "삼가", "불필�
 
 
 def _recap_patterns_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "th"):
         return _EN_POSTMARKET_RECAP_PATTERNS
     if language == "ko":
         return _KO_POSTMARKET_RECAP_PATTERNS
@@ -90,7 +90,7 @@ def _recap_patterns_for(language: str) -> tuple[str, ...]:
 
 
 def _immediate_markers_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "th"):
         return _IMMEDIATE_ACTION_MARKERS_EN
     if language == "ko":
         return _IMMEDIATE_ACTION_MARKERS_KO
@@ -98,14 +98,16 @@ def _immediate_markers_for(language: str) -> tuple[str, ...]:
 
 
 def _negations_for(language: str) -> tuple[str, ...]:
-    if language == "en":
+    if language in ("en", "th"):
         return _NEGATION_PREFIXES_EN
     if language == "ko":
         return _NEGATION_PREFIXES_KO
     return _NEGATION_PREFIXES_ZH
 
 
-def _reason_text(language: str, *, en: str, zh: str, ko: str) -> str:
+def _reason_text(language: str, *, en: str, zh: str, ko: str, th: Optional[str] = None) -> str:
+    if language == "th":
+        return th or en
     if language == "en":
         return en
     if language == "ko":
@@ -257,6 +259,8 @@ def _phase_warning_limitations(summary: Optional[Mapping[str, Any]], *, language
     warnings = _list_strings(summary.get("warnings"))
     if not warnings:
         return []
+    if language == "th":
+        return [f"ข้อควรระวังช่วงตลาด: {item}" for item in warnings]
     if language == "en":
         return [f"market phase warning: {item}" for item in warnings]
     if language == "ko":
@@ -277,7 +281,7 @@ def _merge_limitations(*groups: Any, limit: int = 5) -> List[str]:
 
 def _is_high_confidence(value: Any) -> bool:
     text = _safe_text(value).lower()
-    return text in {"高", "high", "높음"}
+    return text in {"高", "high", "높음", "สูง"}
 
 
 def _has_immediate_buy_sell_signal(

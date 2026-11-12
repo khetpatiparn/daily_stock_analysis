@@ -287,11 +287,11 @@ def _legacy_audit_marker_specs(
     add("stock_code", code)
     add("stock_name", stock_name)
     add("analysis_date", context.get("date"))
-    add("market_phase", "## Market Phase Context" if report_language in ("en", "ko") else "## 市场阶段上下文")
-    add("daily_market_context", "## Daily Market Context" if report_language in ("en", "ko") else "## 大盘环境摘要")
-    add("market_structure_context", "## Market Structure Context" if report_language in ("en", "ko") else "## 市场结构上下文")
+    add("market_phase", "## Market Phase Context" if report_language in ("en", "ko", "th") else "## 市场阶段上下文")
+    add("daily_market_context", "## Daily Market Context" if report_language in ("en", "ko", "th") else "## 大盘环境摘要")
+    add("market_structure_context", "## Market Structure Context" if report_language in ("en", "ko", "th") else "## 市场结构上下文")
     add("analysis_context_pack", analysis_context_pack_summary)
-    english = report_language in ("en", "ko")
+    english = report_language in ("en", "ko", "th")
     add("quote", "## 📈 Technical Data" if english else "## 📈 技术面数据")
     news_marker = "## 📰 News Intelligence" if english else "## 📰 舆情情报"
     add("news_context", news_marker if news_context else None)
@@ -4341,7 +4341,7 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
                 result = self._parse_response(response_text, code, name)
                 result.raw_response = response_text
                 result.search_performed = bool(news_context)
-                result.market_snapshot = self._build_market_snapshot(context)
+                result.market_snapshot = self._build_market_snapshot(context, report_language=report_language)
                 result.model_used = model_used
                 result.report_language = report_language
                 normalize_chip_structure_availability(result, context.get("chip"))
@@ -4404,12 +4404,14 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
                     en=f'Analysis failed: {safe_error[:100]}',
                     zh=f'分析过程出错: {safe_error[:100]}',
                     ko=f'분석 중 오류가 발생했습니다: {safe_error[:100]}',
+                    th=f'การวิเคราะห์เกิดข้อผิดพลาด: {safe_error[:100]}',
                 ),
                 risk_warning=_localized_text(
                     report_language,
                     en='Analysis failed. Please retry later or review manually.',
                     zh='分析失败，请稍后重试或手动分析',
                     ko='분석에 실패했습니다. 잠시 후 다시 시도하거나 수동으로 검토하세요.',
+                    th='การวิเคราะห์ล้มเหลว กรุณาลองใหม่อีกครั้งหรือตรวจสอบด้วยตนเอง',
                 ),
                 success=False,
                 error_message=safe_error,
@@ -4437,9 +4439,9 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
         """
         code = context.get('code', 'Unknown')
         report_language = normalize_report_language(report_language)
-        # Structural template language: Korean reuses the English scaffolding and only
+        # Structural template language: Korean and Thai reuse the English scaffolding and only
         # the final output-language directive differs (#2352).
-        english = report_language in ("en", "ko")
+        english = report_language in ("en", "ko", "th")
         _, _, use_legacy_default_prompt = self._get_skill_prompt_sections()
         
         # 优先使用上下文中的股票名称（从 realtime_quote 获取）
@@ -4810,7 +4812,7 @@ Output strictly in the following JSON format. This is a complete Decision Dashbo
             chip_instruction = (
                 "Do not fabricate profit ratio, average cost, or concentration. Mention chip data "
                 "unavailability only once in the report; do not repeat per-field no-data text in `chip_structure`."
-                if report_language in ("en", "ko")
+                if report_language in ("en", "ko", "th")
                 else "请勿编造获利比例、平均成本或集中度；报告中只说明一次筹码数据不可用，不要把“数据缺失，无法判断”逐字段重复写入 `chip_structure`。"
             )
             chip_section_title = (
@@ -5187,6 +5189,26 @@ Output the complete Decision Dashboard in JSON format."""
 - Use the common Korean or original listed company name when you are confident. If not, keep the listed company name rather than inventing one.
 - When data is missing, explain it in Korean instead of Chinese.
 """
+        elif report_language == "th":
+            prompt += """
+
+### Output language requirements (highest priority)
+- Keep every JSON key exactly as defined above; do not translate JSON keys.
+- `decision_type` must remain `buy`, `hold`, or `sell`.
+- Keep `phase_decision.phase_context` machine enum values (`phase`, `market`, `data_freshness`, `analysis_intent`, `trigger_source`) as defined above.
+- ALL human-readable JSON values MUST be written in natural, professional Thai (ภาษาไทย 100%).
+- NEVER output any Chinese characters (such as 多头排列, 乖离率, 行情, 筹码, 降级, 观望) anywhere in the JSON values.
+- Translate every status and label into Thai, including:
+  - `time_sensitivity`: e.g. "ดำเนินการทันที", "ภายในวันนี้", "ภายในสัปดาห์นี้", "ไม่เร่งด่วน"
+  - `bias_status`: "ปลอดภัย", "เฝ้าระวัง", "อันตราย"
+  - `volume_status`: "ปริมาณซื้อขายหนาแน่น", "ปริมาณซื้อขายปกติ", "ปริมาณซื้อขายเบาบาง"
+  - `chip_health`: "แข็งแกร่ง", "ปานกลาง", "เฝ้าระวัง" (or "ไม่มีข้อมูล")
+  - `latest_news`: prefix with "【ข่าวสารล่าสุด】" in Thai instead of "[Latest News]"
+  - `phase_decision.action_window`, `phase_decision.immediate_action`, `phase_decision.next_check_time`, `phase_decision.confidence_reason`, and `phase_decision.data_limitations`: write completely in Thai (e.g. "ยังไม่ดำเนินการระหว่างวัน", "ข้อมูลราคาใช้แหล่งสำรอง", "ข้อมูลทางเทคนิคมีจำกัด").
+  - `battle_plan.action_checklist`: write all 6 checklist items completely in Thai (use "การเรียงตัวของเส้นค่าเฉลี่ยขาขึ้น (MA5>MA10>MA20)" instead of 多头, and "ระยะห่างจากเส้นค่าเฉลี่ย (Bias)" instead of 乖离率).
+- Currency rule: Use the actual currency of the stock's market in `sniper_points` (`USD` or `$` for US stocks, `HKD` for HK stocks, `CNY` for China A-shares). NEVER write "บาท" (THB) for US, HK, or CN stocks!
+- Keep `stock_name` as the official English listed name for US/global stocks (e.g. "Taiwan Semiconductor Manufacturing", "Apple Inc.", "Vanguard S&P 500 ETF", "Invesco NASDAQ 100 ETF", "NVIDIA Corporation").
+"""
         else:
             prompt += f"""
 
@@ -5203,7 +5225,10 @@ Output the complete Decision Dashboard in JSON format."""
         """格式化成交量显示"""
         if volume is None:
             return 'N/A'
-        if normalize_report_language(report_language) in ("en", "ko", "th"):
+        lang = normalize_report_language(report_language)
+        if lang == "th":
+            return f"{self._format_scaled_number_en(volume)} หุ้น"
+        if lang in ("en", "ko"):
             return f"{self._format_scaled_number_en(volume)} shares"
         if volume >= 1e8:
             return f"{volume / 1e8:.2f} 亿股"
@@ -5254,7 +5279,7 @@ Output the complete Decision Dashboard in JSON format."""
         except (TypeError, ValueError):
             return 'N/A'
 
-    def _build_market_snapshot(self, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _build_market_snapshot(self, context: Dict[str, Any], report_language: str = "zh") -> Dict[str, Any]:
         """构建当日行情快照（展示用）"""
         today = context.get('today', {}) or {}
         realtime = context.get('realtime', {}) or {}
@@ -5279,7 +5304,7 @@ Output the complete Decision Dashboard in JSON format."""
                 change_amount = None
 
         snapshot = {
-            "date": context.get('date', '未知'),
+            "date": context.get('date', get_unknown_text(report_language)),
             "close": self._format_price(close),
             "open": self._format_price(today.get('open')),
             "high": self._format_price(high),
@@ -5288,8 +5313,8 @@ Output the complete Decision Dashboard in JSON format."""
             "pct_chg": self._format_percent(today.get('pct_chg')),
             "change_amount": self._format_price(change_amount),
             "amplitude": self._format_percent(amplitude),
-            "volume": self._format_volume(today.get('volume')),
-            "amount": self._format_amount(today.get('amount')),
+            "volume": self._format_volume(today.get('volume'), report_language),
+            "amount": self._format_amount(today.get('amount'), report_language),
         }
 
         if realtime:
@@ -5314,7 +5339,7 @@ Output the complete Decision Dashboard in JSON format."""
     def _build_integrity_complement_prompt(self, missing_fields: List[str], report_language: str = "zh") -> str:
         """Build complement instruction for missing mandatory fields."""
         report_language = normalize_report_language(report_language)
-        if report_language in ("en", "ko"):
+        if report_language in ("en", "ko", "th"):
             lines = ["### Completion requirements: fill the missing mandatory fields below and output the full JSON again:"]
             for f in missing_fields:
                 if f == "sentiment_score":

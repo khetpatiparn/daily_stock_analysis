@@ -43,6 +43,7 @@ from src.report_language import (
     get_signal_level,
     get_chip_unavailable_reason,
     is_chip_structure_unavailable,
+    localize_bias_status,
     localize_chip_health,
     localize_conflict_severity,
     localize_consensus_level,
@@ -1444,24 +1445,27 @@ class NotificationService(
                         ])
                     # 价格位置
                     if price_data:
-                        bias_status = price_data.get('bias_status', 'N/A')
+                        bias_status = localize_bias_status(
+                            price_data.get('bias_status', 'N/A'),
+                            report_language,
+                        )
                         report_lines.extend([
                             f"| {labels['price_metrics_label']} | {labels['current_price_label']} |",
                             "|---------|------|",
-                            f"| {labels['current_price_label']} | {price_data.get('current_price', 'N/A')} |",
-                            f"| {labels['ma5_label']} | {price_data.get('ma5', 'N/A')} |",
-                            f"| {labels['ma10_label']} | {price_data.get('ma10', 'N/A')} |",
-                            f"| {labels['ma20_label']} | {price_data.get('ma20', 'N/A')} |",
-                            f"| {labels['bias_ma5_label']} | {price_data.get('bias_ma5', 'N/A')}% {bias_status} |",
-                            f"| {labels['support_level_label']} | {price_data.get('support_level', 'N/A')} |",
-                            f"| {labels['resistance_level_label']} | {price_data.get('resistance_level', 'N/A')} |",
+                            f"| {labels['current_price_label']} | {self._format_price_or_text(price_data.get('current_price', 'N/A'))} |",
+                            f"| {labels['ma5_label']} | {self._format_price_or_text(price_data.get('ma5', 'N/A'))} |",
+                            f"| {labels['ma10_label']} | {self._format_price_or_text(price_data.get('ma10', 'N/A'))} |",
+                            f"| {labels['ma20_label']} | {self._format_price_or_text(price_data.get('ma20', 'N/A'))} |",
+                            f"| {labels['bias_ma5_label']} | {self._format_price_or_text(price_data.get('bias_ma5', 'N/A'))}% {bias_status} |",
+                            f"| {labels['support_level_label']} | {self._format_price_or_text(price_data.get('support_level', 'N/A'))} |",
+                            f"| {labels['resistance_level_label']} | {self._format_price_or_text(price_data.get('resistance_level', 'N/A'))} |",
                             "",
                         ])
                     # 量能分析
                     if vol_data:
                         report_lines.extend([
-                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {vol_data.get('volume_ratio', 'N/A')} ({vol_data.get('volume_status', '')}) | "
-                            f"{labels['turnover_rate_label']} {vol_data.get('turnover_rate', 'N/A')}%",
+                            f"**{labels['volume_label']}**: {labels['volume_ratio_label']} {self._format_price_or_text(vol_data.get('volume_ratio', 'N/A'))} ({vol_data.get('volume_status', '')}) | "
+                            f"{labels['turnover_rate_label']} {self._format_price_or_text(vol_data.get('turnover_rate', 'N/A'))}%",
                             f"💡 *{vol_data.get('volume_meaning', '')}*",
                             "",
                         ])
@@ -2181,12 +2185,34 @@ class NotificationService(
         "TWD": "新台币",  # 台股 (TWSE/TPEx) 以新台币计价，避免与 A 股「元」(人民币) 混淆
     }
 
-    @classmethod
-    def _format_amount_cn(cls, value: Any, currency: Optional[str] = None) -> str:
-        """Format absolute amounts in 亿/万 + currency suffix; returns N/A on non-numeric.
+    @staticmethod
+    def _format_price_or_text(value: Any) -> str:
+        """Format float/int to 2 decimal places when numeric, otherwise preserve string."""
+        if value is None or isinstance(value, bool):
+            return "N/A"
+        if isinstance(value, (int, float)):
+            if value != value:  # NaN
+                return "N/A"
+            return f"{float(value):.2f}"
+        text = str(value).strip()
+        if not text:
+            return "N/A"
+        try:
+            numeric = float(text)
+            if "." in text and len(text.split(".", 1)[1]) > 2:
+                return f"{numeric:.2f}"
+        except (TypeError, ValueError):
+            pass
+        return text
 
-        ``currency`` accepts ``USD``/``HKD``/``CNY``; unknown values fall back to 元.
-        """
+    @classmethod
+    def _format_amount_cn(
+        cls,
+        value: Any,
+        currency: Optional[str] = None,
+        report_language: str = "zh",
+    ) -> str:
+        """Format absolute amounts in 亿/万 + currency suffix (or B/M/K + ISO code for en/ko/th)."""
         try:
             amount = float(value)
         except (TypeError, ValueError):
@@ -2195,6 +2221,16 @@ class NotificationService(
             return "N/A"
         sign = "-" if amount < 0 else ""
         abs_amount = abs(amount)
+        lang = normalize_report_language(report_language)
+        if lang in ("en", "ko", "th"):
+            curr_code = (currency or "CNY").strip().upper() or "CNY"
+            if abs_amount >= 1e9:
+                return f"{sign}{abs_amount / 1e9:,.2f}B {curr_code}"
+            if abs_amount >= 1e6:
+                return f"{sign}{abs_amount / 1e6:,.2f}M {curr_code}"
+            if abs_amount >= 1e3:
+                return f"{sign}{abs_amount / 1e3:,.2f}K {curr_code}"
+            return f"{sign}{abs_amount:.0f} {curr_code}"
         suffix = cls._CURRENCY_SUFFIX.get((currency or "").upper(), "元")
         if abs_amount >= 1e8:
             return f"{sign}{abs_amount / 1e8:.2f} 亿{suffix}"
@@ -2210,13 +2246,22 @@ class NotificationService(
             return "N/A"
 
     @classmethod
-    def _format_per_share(cls, value: Any, currency: Optional[str] = None) -> str:
+    def _format_per_share(
+        cls,
+        value: Any,
+        currency: Optional[str] = None,
+        report_language: str = "zh",
+    ) -> str:
         try:
             amount = float(value)
         except (TypeError, ValueError):
             return "N/A"
         if amount != amount:  # NaN
             return "N/A"
+        lang = normalize_report_language(report_language)
+        if lang in ("en", "ko", "th"):
+            curr_code = (currency or "CNY").strip().upper() or "CNY"
+            return f"{amount:.4f} {curr_code}"
         suffix = cls._CURRENCY_SUFFIX.get((currency or "").upper(), "元")
         return f"{amount:.4f} {suffix}"
 
@@ -2302,9 +2347,9 @@ class NotificationService(
         report_language = self._get_report_language(result)
         labels = get_report_labels(report_language)
 
-        self._append_financial_summary(lines, blocks, labels)
-        self._append_shareholder_return(lines, blocks, labels)
-        self._append_institutional_flow(lines, blocks, labels)
+        self._append_financial_summary(lines, blocks, labels, report_language=report_language)
+        self._append_shareholder_return(lines, blocks, labels, report_language=report_language)
+        self._append_institutional_flow(lines, blocks, labels, report_language=report_language)
         self._append_related_boards(lines, blocks, labels)
 
     def _append_financial_summary(
@@ -2312,15 +2357,16 @@ class NotificationService(
         lines: List[str],
         blocks: Dict[str, Any],
         labels: Dict[str, str],
+        report_language: str = "zh",
     ) -> None:
         report = blocks.get("financial_report") or {}
         growth = blocks.get("growth") or {}
         currency = report.get("currency") if isinstance(report.get("currency"), str) else None
         cells = {
             "report_date": self._format_text(report.get("report_date")),
-            "revenue": self._format_amount_cn(report.get("revenue"), currency),
-            "net_profit": self._format_amount_cn(report.get("net_profit_parent"), currency),
-            "operating_cash_flow": self._format_amount_cn(report.get("operating_cash_flow"), currency),
+            "revenue": self._format_amount_cn(report.get("revenue"), currency, report_language=report_language),
+            "net_profit": self._format_amount_cn(report.get("net_profit_parent"), currency, report_language=report_language),
+            "operating_cash_flow": self._format_amount_cn(report.get("operating_cash_flow"), currency, report_language=report_language),
             "roe": self._format_percent(report.get("roe") if report.get("roe") is not None else growth.get("roe")),
             "revenue_yoy": self._format_percent(growth.get("revenue_yoy")),
             "net_profit_yoy": self._format_percent(growth.get("net_profit_yoy")),
@@ -2353,6 +2399,7 @@ class NotificationService(
         lines: List[str],
         blocks: Dict[str, Any],
         labels: Dict[str, str],
+        report_language: str = "zh",
     ) -> None:
         dividend = blocks.get("dividend") or {}
         report = blocks.get("financial_report") or {}
@@ -2369,7 +2416,11 @@ class NotificationService(
 
         ttm_event_count = dividend.get("ttm_event_count")
         cells = {
-            "ttm_cash": self._format_per_share(dividend.get("ttm_cash_dividend_per_share"), dividend_currency),
+            "ttm_cash": self._format_per_share(
+                dividend.get("ttm_cash_dividend_per_share"),
+                dividend_currency,
+                report_language=report_language,
+            ),
             "ttm_count": str(ttm_event_count) if isinstance(ttm_event_count, int) else "N/A",
             "ttm_yield": self._format_percent(dividend.get("ttm_dividend_yield_pct")),
             "latest_ex": self._format_text(latest_event.get("ex_dividend_date") or latest_event.get("event_date")),
@@ -2393,11 +2444,8 @@ class NotificationService(
         ])
 
     @classmethod
-    def _format_net_shares(cls, value: Any) -> str:
-        """Format an institutional net buy/sell in 万股/亿股, signed (+ = net buy).
-
-        Thresholds: abs >= 1e8 -> 亿股, >= 1e4 -> 万股, else 股. None/NaN/non-numeric -> N/A.
-        """
+    def _format_net_shares(cls, value: Any, report_language: str = "zh") -> str:
+        """Format an institutional net buy/sell in 万股/亿股 (or M/K shares/หุ้น), signed (+ = net buy)."""
         try:
             amount = float(value)
         except (TypeError, ValueError):
@@ -2406,6 +2454,16 @@ class NotificationService(
             return "N/A"
         sign = "+" if amount > 0 else ("-" if amount < 0 else "")
         a = abs(amount)
+        lang = normalize_report_language(report_language)
+        if lang in ("en", "ko", "th"):
+            unit = "หุ้น" if lang == "th" else "shares"
+            if a >= 1e9:
+                return f"{sign}{a / 1e9:.2f}B {unit}"
+            if a >= 1e6:
+                return f"{sign}{a / 1e6:.2f}M {unit}"
+            if a >= 1e3:
+                return f"{sign}{a / 1e3:.2f}K {unit}"
+            return f"{sign}{a:.0f} {unit}"
         if a >= 1e8:
             return f"{sign}{a / 1e8:.2f} 亿股"
         if a >= 1e4:
@@ -2417,6 +2475,7 @@ class NotificationService(
         lines: List[str],
         blocks: Dict[str, Any],
         labels: Dict[str, str],
+        report_language: str = "zh",
     ) -> None:
         """Append the 三大法人 (institutional flows) table — tw-only.
 
@@ -2428,10 +2487,10 @@ class NotificationService(
             return
         inst = blocks.get("institution") or {}
         cells = {
-            "foreign": self._format_net_shares(inst.get("foreign_net")),
-            "trust": self._format_net_shares(inst.get("trust_net")),
-            "dealer": self._format_net_shares(inst.get("dealer_net")),
-            "total": self._format_net_shares(inst.get("total_net")),
+            "foreign": self._format_net_shares(inst.get("foreign_net"), report_language=report_language),
+            "trust": self._format_net_shares(inst.get("trust_net"), report_language=report_language),
+            "dealer": self._format_net_shares(inst.get("dealer_net"), report_language=report_language),
+            "total": self._format_net_shares(inst.get("total_net"), report_language=report_language),
         }
         if all(v == "N/A" for v in cells.values()):
             return

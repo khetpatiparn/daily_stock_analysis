@@ -813,6 +813,10 @@ def _persist_market_review_history(
             stock_name = "시황 리뷰"
             operation_advice = "리뷰 보기"
             trend_prediction = "시황 리뷰"
+        elif report_language == "th":
+            stock_name = "สรุปภาพรวมตลาด"
+            operation_advice = "ดูรายงานสรุปตลาด"
+            trend_prediction = "สรุปภาพรวมตลาด"
         else:
             stock_name = "大盘复盘"
             operation_advice = "查看复盘"
@@ -919,6 +923,7 @@ def _build_market_review_context_overview(
     label = (
         "Market review" if report_language == "en"
         else "시황 리뷰" if report_language == "ko"
+        else "สรุปภาพรวมตลาด" if report_language == "th"
         else "大盘复盘"
     )
     return {
@@ -961,4 +966,6 @@ def _summarize_market_review(review_report: str, report_language: str) -> str:
         return "Market review report generated."
     if report_language == "ko":
         return "시황 리뷰 리포트가 생성되었습니다."
+    if report_language == "th":
+        return "สร้างรายงานสรุปภาพรวมตลาดเรียบร้อยแล้ว"
     return "大盘复盘报告已生成。"
