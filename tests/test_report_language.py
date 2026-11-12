@@ -202,6 +202,16 @@ class ThaiReportLanguageTestCase(unittest.TestCase):
         self.assertEqual(localize_trend_prediction("ขาขึ้น", "en"), "Bullish")
         self.assertEqual(localize_operation_advice("ขายทันที", "zh"), "强烈卖出")
 
+    def test_source_display_name_supports_all_languages(self) -> None:
+        from src.notification import NotificationService
+
+        service = NotificationService.__new__(NotificationService)
+        for lang in SUPPORTED_REPORT_LANGUAGES:
+            for source_key in NotificationService._SOURCE_DISPLAY_NAMES:
+                display = service._get_source_display_name(source_key, lang)
+                self.assertTrue(display)
+        self.assertEqual(service._get_source_display_name("fallback", "th"), "แหล่งข้อมูลสำรอง")
+
 
 if __name__ == "__main__":
     unittest.main()

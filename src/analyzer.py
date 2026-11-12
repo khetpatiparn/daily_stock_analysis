@@ -1380,10 +1380,22 @@ def _capital_flow_bias_with_status(
 def _capital_flow_status_for_stability(reason: str, language: str) -> str:
     normalized = str(reason or "").strip().lower()
     if "not_supported" in normalized or "unsupported" in normalized or "not available" in normalized:
-        return "市场资金流服务暂不支持" if language == "zh" else "Capital flow source unsupported"
+        if language == "zh":
+            return "市场资金流服务暂不支持"
+        if language == "th":
+            return "ยังไม่รองรับข้อมูลกระแสเงินทุนสำหรับตลาดนี้"
+        return "Capital flow source unsupported"
     if "empty_stock_flow" in normalized or "missing" in normalized:
-        return "资金流数据缺失" if language == "zh" else "capital flow data unavailable"
-    return "资金流数据不可用" if language == "zh" else "capital flow unavailable"
+        if language == "zh":
+            return "资金流数据缺失"
+        if language == "th":
+            return "ไม่มีข้อมูลกระแสเงินทุน"
+        return "capital flow data unavailable"
+    if language == "zh":
+        return "资金流数据不可用"
+    if language == "th":
+        return "ข้อมูลกระแสเงินทุนไม่พร้อมใช้งาน"
+    return "capital flow unavailable"
 
 
 def _set_decision_stability_unavailable(
@@ -1397,9 +1409,15 @@ def _set_decision_stability_unavailable(
 ) -> None:
     dashboard = result.dashboard if isinstance(result.dashboard, dict) else {}
     result.dashboard = dashboard
+    if language == "zh":
+        reason_text = "资金流不可用，未使用资金流校准"
+    elif language == "th":
+        reason_text = "ไม่มีข้อมูลกระแสเงินทุน จึงไม่ได้ปรับสมดุลด้วยกระแสเงินทุน"
+    else:
+        reason_text = "Capital flow unavailable; stability calibration not applied"
     dashboard["decision_stability"] = {
         "applied": False,
-        "reason": "资金流不可用，未使用资金流校准" if language == "zh" else "Capital flow unavailable; stability calibration not applied",
+        "reason": reason_text,
         "capital_flow_status": _capital_flow_status_for_stability(flow_status, language),
         "current_price": current_price,
         "support": support,
@@ -1475,8 +1493,15 @@ def _apply_hold_watch_dashboard(
     if not isinstance(core, dict):
         core = {}
         dashboard["core_conclusion"] = core
-    core["signal_type"] = "🟡持有观望" if language == "zh" else "🟡 Hold / Watch"
-    core["one_sentence"] = f"{advice}：{reason}" if language == "zh" else f"{advice}: {reason}"
+    if language == "zh":
+        core["signal_type"] = "🟡持有观望"
+        core["one_sentence"] = f"{advice}：{reason}"
+    elif language == "th":
+        core["signal_type"] = "🟡 ถือและรอดูจังหวะ"
+        core["one_sentence"] = f"{advice}: {reason}"
+    else:
+        core["signal_type"] = "🟡 Hold / Watch"
+        core["one_sentence"] = f"{advice}: {reason}"
 
     position_advice = core.get("position_advice")
     if not isinstance(position_advice, dict):
@@ -1524,6 +1549,12 @@ def _downgrade_buy_without_capital_flow(
         no_position = "空仓先不追买，等待资金流恢复、支撑确认或有效突破后再行动。"
         has_position = "持仓以关键支撑为风控线，资金流恢复前控制仓位。"
         confidence = "低"
+    elif language == "th":
+        advice = "ถือและรอดู"
+        reason = f"{status_text} สัญญาณซื้อยังขาดการยืนยันจากกระแสเงินทุน แนะนำให้รอดูจังหวะก่อน"
+        no_position = "พอร์ตว่างไม่ควรไล่ราคา รอให้แนวรับยืนยันหรือราคาทะลุแนวต้านพร้อมโวลุ่มก่อนเข้าซื้อ"
+        has_position = "มีหุ้นอยู่ใช้แนวรับสำคัญเป็นจุดคุมความเสี่ยง และควบคุมขนาดพอร์ต"
+        confidence = "ต่ำ"
     else:
         advice = "Hold and watch"
         reason = f"{status_text}; the buy call lacks capital-flow confirmation, so treat it as watch-only."
@@ -1604,8 +1635,18 @@ def _set_structural_hold_wording(
             "shakeout": "흔들기 관찰",
             "hold": "보유 관찰",
         },
+        "th": {
+            "range": "รอดูในกรอบไซด์เวย์",
+            "shakeout": "รอดูจังหวะพักตัว",
+            "hold": "ถือและรอดู",
+        },
     }
-    advice_default = {"zh": "持有观察", "en": "Hold and watch", "ko": "보유 관찰"}.get(language, "Hold and watch")
+    advice_default = {
+        "zh": "持有观察",
+        "en": "Hold and watch",
+        "ko": "보유 관찰",
+        "th": "ถือและรอดู",
+    }.get(language, "Hold and watch")
     advice = advice_map.get(language, advice_map["en"]).get(advice_key, advice_default)
     reason_templates = {
         "zh": {
@@ -1632,6 +1673,14 @@ def _set_structural_hold_wording(
             "hold_shakeout": "가격이 지지선 부근까지 눌렸지만 유출이 확인되지 않아 흔들기 관찰로 처리하는 것이 적절합니다.",
             "hold_mid_range": "가격이 지지선과 저항선 사이이고 자금 흐름이 불명확해 박스권 관망이 더 실행 가능합니다.",
         },
+        "th": {
+            "buy_near_resistance": "ราคาเข้าใกล้แนวต้านโดยยังไม่มีแรงซื้อรายใหญ่ยืนยัน จึงไม่ควรไล่ซื้อตามการรีบาวด์ระยะสั้น",
+            "buy_with_outflow": "กระแสเงินทุนไหลออกขัดแย้งกับสัญญาณซื้อ ควรรอให้ยืนแนวรับได้หรือมีเงินทุนไหลเข้าก่อน",
+            "sell_near_support": "ราคาอยู่ใกล้แนวรับและไม่มีแรงขายต่อเนื่อง จึงไม่ควรรีบขายเพียงเพราะย่อตัววันเดียว",
+            "sell_with_inflow": "กระแสเงินทุนไหลเข้าขัดแย้งกับสัญญาณขาย แนะนำให้ถือรอดูและติดตามว่าหลุดแนวรับหรือไม่",
+            "hold_shakeout": "ราคาย่อตัวใกล้แนวรับแต่ยังไม่มีแรงขายชัดเจน เหมาะกับการรอดูจังหวะพักฐาน",
+            "hold_mid_range": "ราคาอยู่กึ่งกลางระหว่างแนวรับและแนวต้านพร้อมกระแสเงินทุนเป็นกลาง การรอดูในกรอบจึงเหมาะสมกว่า",
+        },
     }
     reason = reason_templates.get(language, reason_templates["en"]).get(reason_key, "")
     if calibrate_score:
@@ -1645,6 +1694,8 @@ def _set_structural_hold_wording(
             result.trend_prediction = "Sideways"
         elif language == "ko":
             result.trend_prediction = "횡보"
+        elif language == "th":
+            result.trend_prediction = "แกว่งตัวไซด์เวย์"
 
     if language == "zh":
         no_position = "空仓先不追涨杀跌，等待支撑确认、放量突破或资金回流后再行动。"
@@ -1652,6 +1703,9 @@ def _set_structural_hold_wording(
     elif language == "ko":
         no_position = "현금 보유 시 추격·투매를 삼가고 지지 확인·대량 돌파·자금 재유입 후 행동하세요."
         has_position = "보유 시 핵심 지지선을 리스크 관리선으로 삼고, 이탈 전까지 관찰과 분할 관리 위주로 대응하세요."
+    elif language == "th":
+        no_position = "พอร์ตว่างไม่ควรไล่ซื้อหรือตื่นตระหนก รอให้ยืนแนวรับได้หรือเบรคเอาท์พร้อมโวลุ่มก่อนเข้าลงทุน"
+        has_position = "มีหุ้นอยู่ใช้แนวรับสำคัญเป็นจุดคุมความเสี่ยง หากยังไม่หลุดแนวรับให้ถือรอดูและบริหารสัดส่วนพอร์ต"
     else:
         no_position = "Do not chase or panic; wait for support confirmation, breakout, or renewed inflow."
         has_position = "Use key support as the risk line and manage position size unless support fails."

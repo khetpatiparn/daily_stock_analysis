@@ -2120,16 +2120,16 @@ class NotificationService(
 
     # Display name mapping for realtime data sources
     _SOURCE_DISPLAY_NAMES = {
-        "tencent": {"zh": "腾讯财经", "en": "Tencent Finance"},
-        "akshare_em": {"zh": "东方财富", "en": "Eastmoney"},
-        "akshare_sina": {"zh": "新浪财经", "en": "Sina Finance"},
-        "akshare_qq": {"zh": "腾讯财经", "en": "Tencent Finance"},
-        "efinance": {"zh": "东方财富(efinance)", "en": "Eastmoney (efinance)"},
-        "tushare": {"zh": "Tushare Pro", "en": "Tushare Pro"},
-        "sina": {"zh": "新浪财经", "en": "Sina Finance"},
-        "stooq": {"zh": "Stooq", "en": "Stooq"},
-        "longbridge": {"zh": "长桥", "en": "Longbridge"},
-        "fallback": {"zh": "降级兜底", "en": "Fallback"},
+        "tencent": {"zh": "腾讯财经", "en": "Tencent Finance", "ko": "Tencent Finance", "th": "Tencent Finance"},
+        "akshare_em": {"zh": "东方财富", "en": "Eastmoney", "ko": "Eastmoney", "th": "Eastmoney"},
+        "akshare_sina": {"zh": "新浪财经", "en": "Sina Finance", "ko": "Sina Finance", "th": "Sina Finance"},
+        "akshare_qq": {"zh": "腾讯财经", "en": "Tencent Finance", "ko": "Tencent Finance", "th": "Tencent Finance"},
+        "efinance": {"zh": "东方财富(efinance)", "en": "Eastmoney (efinance)", "ko": "Eastmoney (efinance)", "th": "Eastmoney (efinance)"},
+        "tushare": {"zh": "Tushare Pro", "en": "Tushare Pro", "ko": "Tushare Pro", "th": "Tushare Pro"},
+        "sina": {"zh": "新浪财经", "en": "Sina Finance", "ko": "Sina Finance", "th": "Sina Finance"},
+        "stooq": {"zh": "Stooq", "en": "Stooq", "ko": "Stooq", "th": "Stooq"},
+        "longbridge": {"zh": "长桥", "en": "Longbridge", "ko": "Longbridge", "th": "Longbridge"},
+        "fallback": {"zh": "降级兜底", "en": "Fallback", "ko": "대체 데이터", "th": "แหล่งข้อมูลสำรอง"},
     }
 
     def _get_source_display_name(self, source: Any, language: Optional[str]) -> str:
@@ -2137,7 +2137,8 @@ class NotificationService(
         mapping = self._SOURCE_DISPLAY_NAMES.get(raw_source)
         if not mapping:
             return raw_source
-        return mapping[normalize_report_language(language)]
+        lang = normalize_report_language(language)
+        return mapping.get(lang) or mapping.get("en", raw_source)
 
     def _append_market_snapshot(self, lines: List[str], result: AnalysisResult) -> None:
         snapshot = getattr(result, 'market_snapshot', None)
