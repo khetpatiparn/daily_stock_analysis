@@ -41,11 +41,18 @@ _KO_ZERO_RESULTS = (
     "⚠️ 이번 분석에서 사용 가능한 뉴스 데이터를 가져오지 못해 "
     "아래 결론에는 뉴스 근거를 반영하지 않았습니다."
 )
+_TH_NOT_CONFIGURED = (
+    "⚠️ ไม่ได้กำหนดค่าช่องทางค้นหาข่าวสาร การวิเคราะห์รอบนี้จึงไม่ได้รวมหลักฐานมิติด้านข่าวสาร"
+)
+_TH_ZERO_RESULTS = (
+    "⚠️ ไม่สามารถดึงข้อมูลข่าวสารสำหรับรอบนี้ได้ ข้อสรุปด้านล่างจึงไม่ได้รวมหลักฐานมิติด้านข่าวสาร"
+)
 
 _DISCLOSURES = {
     "zh": (_ZH_NOT_CONFIGURED, _ZH_ZERO_RESULTS),
     "en": (_EN_NOT_CONFIGURED, _EN_ZERO_RESULTS),
     "ko": (_KO_NOT_CONFIGURED, _KO_ZERO_RESULTS),
+    "th": (_TH_NOT_CONFIGURED, _TH_ZERO_RESULTS),
 }
 
 if set(_DISCLOSURES) != set(SUPPORTED_REPORT_LANGUAGES):

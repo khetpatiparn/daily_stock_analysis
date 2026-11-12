@@ -230,6 +230,20 @@ def test_analyze_request_rejects_invalid_analysis_phase() -> None:
         raise AssertionError("invalid analysis_phase should be rejected")
 
 
+def test_request_models_accept_thai_report_language() -> None:
+    analyze_req = AnalyzeRequest.model_validate({
+        "stock_code": "AAPL",
+        "report_language": "th",
+    })
+    assert analyze_req.report_language == "th"
+
+    market_req = MarketReviewRequest.model_validate({
+        "region": "us",
+        "report_language": "th",
+    })
+    assert market_req.report_language == "th"
+
+
 def test_decision_signal_static_api_spec_matches_runtime_paths() -> None:
     static_spec_path = Path(__file__).resolve().parents[1] / "docs" / "architecture" / "api_spec.json"
     static_spec = json.loads(static_spec_path.read_text(encoding="utf-8"))

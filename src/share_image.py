@@ -105,6 +105,23 @@ _POSTER_TEXT = {
         "disclaimer": "AI 생성 연구 자료이며 투자 조언이 아닙니다. 투자에는 위험이 따릅니다.",
         "source": "데이터 소스",
     },
+    "th": {
+        "brand": "วิเคราะห์หุ้นด้วย AI", "stock_subtitle": "การ์ดสรุปการตัดสินใจ · ข้อสรุป ระดับราคา และความเสี่ยง",
+        "market_subtitle": "สรุปตลาด ดัชนีหลัก หุ้นนำ และคำเตือนความเสี่ยง", "multi_title": "สรุปภาพรวมหลายตลาด",
+        "multi_subtitle": "ดัชนีแยกตามตลาด หุ้นนำ และความเสี่ยง", "dashboard_subtitle": "สรุปแดชบอร์ดการตัดสินใจหุ้นหลายตัว",
+        "score": "คะแนน", "confidence": "ความมั่นใจ", "trend": "แนวโน้ม", "core": "บทสรุปหลัก",
+        "snapshot": "ข้อมูลราคา", "execution": "แผนกลยุทธ์", "technical": "ข้อมูลเทคนิค",
+        "next_watch": "จุดเฝ้าระวังถัดไป", "positive_catalysts": "ปัจจัยหนุนเชิงบวก", "risk_alerts": "เตือนความเสี่ยง",
+        "catalysts_risks": "ปัจจัยหนุนและความเสี่ยง", "no_position": "ยังไม่มีหุ้น", "holding": "มีหุ้นในพอร์ต",
+        "position": "ขนาดพอร์ต", "entry": "การเข้าซื้อ", "risk_control": "คุมความเสี่ยง", "position_advice": "คำแนะนำพอร์ต",
+        "market_signal": "สัญญาณตลาด", "today_conclusion": "บทสรุปวันนี้", "breadth": "ความกว้างตลาด",
+        "dimensions": "วิเคราะห์สัญญาณ", "leaders": "กลุ่มนำตลาด", "laggards": "กลุ่มตามตลาด",
+        "focus_tag": "รอดู", "avoid_tag": "หลีกเลี่ยง", "focus": "หุ้นเฝ้าระวังหลัก", "funds": "กระแสเงินทุน",
+        "strategy": "แผนสำหรับรอบถัดไป", "risks": "เตือนความเสี่ยง", "tagline": "ช่วยให้การวิเคราะห์หุ้นง่ายและมีประสิทธิภาพขึ้น",
+        "open_source": "โอเพ่นซอร์ส · GitHub", "xiaohongshu": "Xiaohongshu",
+        "disclaimer": "รายงานสร้างโดย AI เพื่อการศึกษาค้นคว้า ไม่ใช่คำแนะนำทางการเงิน การลงทุนมีความเสี่ยง",
+        "source": "แหล่งข้อมูล",
+    },
 }
 _POSTER_LABELS = {
     "en": {
@@ -124,6 +141,15 @@ _POSTER_LABELS = {
         "行动窗口": "행동 구간", "下次检查": "다음 점검", "上涨": "상승", "下跌": "하락",
         "涨停": "상한가", "跌停": "하한가", "成交额": "거래대금", "赚钱效应": "시장 폭 점수",
         "指数强度": "지수 강도", "涨停结构": "상한가 구조",
+    },
+    "th": {
+        "当前/收盘": "ปัจจุบัน/ราคาปิด", "现价": "ราคาปัจจุบัน", "涨跌幅": "เปลี่ยนแปลง %", "涨跌": "เปลี่ยนแปลง",
+        "量比": "อัตราส่วนโวลุ่ม", "换手率": "อัตราหมุนเวียน", "换手": "อัตราหมุนเวียน", "理想买入": "จุดซื้ออุดมคติ",
+        "确认买入": "จุดซื้อยืนยัน", "止损": "Stop-Loss", "目标": "ราคาเป้าหมาย", "均线": "เส้นค่าเฉลี่ย",
+        "量能": "ปริมาณซื้อขาย", "趋势分": "คะแนนแนวโน้ม", "MA5乖离": "เบี่ยงเบน MA5", "支撑": "แนวรับ", "压力": "แนวต้าน",
+        "行动窗口": "ช่วงเวลาแอ็กชัน", "下次检查": "ตรวจรอบถัดไป", "上涨": "หุ้นบวก", "下跌": "หุ้นลบ",
+        "涨停": "ลิมิตอัป", "跌停": "ลิมิตดาวน์", "成交额": "มูลค่าซื้อขาย", "赚钱效应": "คะแนนความกว้างตลาด",
+        "指数强度": "ความแข็งแกร่งดัชนี", "涨停结构": "โครงสร้างลิมิตอัป",
     },
 }
 _MARKET_LABEL_PATTERNS = (
@@ -348,8 +374,12 @@ def _poster_language(
             return "en"
         if normalized.startswith("ko"):
             return "ko"
+        if normalized.startswith("th"):
+            return "th"
         if normalized.startswith("zh"):
             return "zh"
+    if re.search(r"[\u0e00-\u0e7f]", markdown_text or ""):
+        return "th"
     if re.search(r"[\uac00-\ud7af]", markdown_text or ""):
         return "ko"
     if re.search(
@@ -368,7 +398,7 @@ def _poster_text(language: str, key: str) -> str:
 def _poster_html_language(language: str) -> str:
     """Map the supported report language, not the market region, to HTML lang."""
 
-    return {"zh": "zh-CN", "en": "en", "ko": "ko"}.get(language, "zh-CN")
+    return {"zh": "zh-CN", "en": "en", "ko": "ko", "th": "th"}.get(language, "zh-CN")
 
 
 def _poster_label(language: str, label: str) -> str:
@@ -379,6 +409,8 @@ def _poster_label(language: str, label: str) -> str:
         return label.replace("观察 ", "Watch ", 1)
     if language == "ko" and label.startswith("观察 "):
         return label.replace("观察 ", "관찰 ", 1)
+    if language == "th" and label.startswith("观察 "):
+        return label.replace("观察 ", "เฝ้าสังเกต ", 1)
     return label
 
 
@@ -1276,7 +1308,7 @@ def _stock_data_from_payload(
 def _market_title(markdown_text: str) -> str:
     first_title = next((title for title, _body, _level in _extract_sections(markdown_text)), "")
     language = _poster_language(markdown_text)
-    if language in {"en", "ko"} and _is_market_review_title(first_title):
+    if language in {"en", "ko", "th"} and _is_market_review_title(first_title):
         return first_title
     market = _market_label(first_title)
     if market:
@@ -2128,6 +2160,7 @@ def build_share_image_html(
     body {{ color: #081b40; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", "Noto Sans CJK SC", "Noto Sans CJK KR", Arial, sans-serif; font-size: 22px; line-height: 1.5; -webkit-font-smoothing: antialiased; }}
     html[lang="zh-CN"] body {{ font-family: "Noto Sans CJK SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }}
     html[lang="ko"] body {{ font-family: "Noto Sans CJK KR", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }}
+    html[lang="th"] body {{ font-family: "Noto Sans Thai", "Thonburi", "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }}
     .poster {{ width: 1080px; padding: 38px 34px 24px; border: 1px solid #aebdd4; border-radius: 28px; background: radial-gradient(circle at 92% 6%, rgba(48,123,255,.15), transparent 260px), linear-gradient(180deg,#fff 0%,#fbfdff 78%,#eef5ff 100%); }}
     .poster-header {{ display: table; width: 100%; margin-bottom: 28px; }}
     .brand, .meta {{ display: table-cell; vertical-align: middle; }}

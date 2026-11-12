@@ -136,6 +136,17 @@ def _get_market_review_text(language: str) -> dict[str, str]:
             "kr_title": "# 한국 시황 리뷰",
             "separator": "> 다음 시장 시황 리뷰",
         }
+    if normalized == "th":
+        return {
+            "root_title": "# 🎯 สรุปภาพรวมตลาด",
+            "push_title": "🎯 สรุปภาพรวมตลาด",
+            "cn_title": "# สรุปภาพรวมตลาดหุ้นจีน A-share",
+            "us_title": "# สรุปภาพรวมตลาดหุ้นสหรัฐฯ (US Market)",
+            "hk_title": "# สรุปภาพรวมตลาดหุ้นฮ่องกง (HK)",
+            "jp_title": "# สรุปภาพรวมตลาดหุ้นญี่ปุ่น (JP)",
+            "kr_title": "# สรุปภาพรวมตลาดหุ้นเกาหลี (KR)",
+            "separator": "> รายงานสรุปตลาดถัดไป",
+        }
     return {
         "root_title": "# 🎯 大盘复盘",
         "push_title": "🎯 大盘复盘",

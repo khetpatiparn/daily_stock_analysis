@@ -150,5 +150,58 @@ class KoreanReportLanguageTestCase(unittest.TestCase):
         self.assertEqual(localize_operation_advice("적극 매도", "zh"), "强烈卖出")
 
 
+class ThaiReportLanguageTestCase(unittest.TestCase):
+    def test_thai_is_supported(self) -> None:
+        self.assertIn("th", SUPPORTED_REPORT_LANGUAGES)
+
+    def test_normalize_thai_aliases(self) -> None:
+        self.assertEqual(normalize_report_language("th"), "th")
+        self.assertEqual(normalize_report_language("thai"), "th")
+        self.assertEqual(normalize_report_language("th-TH"), "th")
+        self.assertEqual(normalize_report_language("th_th"), "th")
+
+    def test_thai_labels_cover_full_english_key_set(self) -> None:
+        th_labels = get_report_labels("th")
+        en_labels = get_report_labels("en")
+        zh_labels = get_report_labels("zh")
+        self.assertEqual(set(th_labels.keys()), set(en_labels.keys()))
+        self.assertEqual(set(zh_labels.keys()), set(en_labels.keys()))
+        self.assertEqual(th_labels["dashboard_title"], "แดชบอร์ดการตัดสินใจ")
+        self.assertEqual(th_labels["risk_alerts_label"], "สัญญาณเตือนความเสี่ยง")
+
+    def test_data_sources_label_is_localized_thai(self) -> None:
+        self.assertEqual(get_report_labels("th")["data_sources_label"], "แหล่งข้อมูล")
+
+    def test_thai_sentiment_label_bands(self) -> None:
+        self.assertEqual(get_sentiment_label(80, "th"), "มองบวกอย่างมาก")
+        self.assertEqual(get_sentiment_label(40, "th"), "เป็นกลาง")
+        self.assertEqual(get_sentiment_label(0, "th"), "มองลบอย่างมาก")
+
+    def test_thai_operation_advice_and_trend(self) -> None:
+        self.assertEqual(localize_operation_advice("买入", "th"), "ซื้อ")
+        self.assertEqual(localize_operation_advice("strong sell", "th"), "ขายทันที")
+        self.assertEqual(localize_trend_prediction("bullish", "th"), "ขาขึ้น")
+
+    def test_thai_localized_stock_name_placeholder(self) -> None:
+        self.assertEqual(
+            get_localized_stock_name("股票AAPL", "AAPL", "th"),
+            "หุ้นที่ยังไม่ระบุชื่อ",
+        )
+
+    def test_thai_advice_canonicalizes_to_decision_type(self) -> None:
+        self.assertEqual(infer_decision_type_from_advice("ซื้อ"), "buy")
+        self.assertEqual(infer_decision_type_from_advice("ขาย"), "sell")
+        self.assertEqual(infer_decision_type_from_advice("ถือ"), "hold")
+        self.assertEqual(infer_decision_type_from_advice("รอดู"), "hold")
+
+    def test_thai_advice_resolves_signal_level(self) -> None:
+        self.assertEqual(get_signal_level("ซื้อ", 72, "th"), ("ซื้อ", "🟢", "buy"))
+        self.assertEqual(get_signal_level("ขาย", 30, "th"), ("ขาย", "🔴", "sell"))
+
+    def test_thai_values_canonicalize_back_for_other_languages(self) -> None:
+        self.assertEqual(localize_trend_prediction("ขาขึ้น", "en"), "Bullish")
+        self.assertEqual(localize_operation_advice("ขายทันที", "zh"), "强烈卖出")
+
+
 if __name__ == "__main__":
     unittest.main()
